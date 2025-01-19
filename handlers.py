@@ -21,9 +21,8 @@ class ProfileStates(StatesGroup):
 
 # Хранилище для логов воды
 user_water_logs = {}
-
-# Хранилище для суммарных калорий от еды
-user_calories_logs = {}
+# Хранилище для профилей пользователей
+user_profiles = {}
 
 # Команда /start
 @router.message(Command('start'))
@@ -108,23 +107,24 @@ async def process_city(message: Message, state: FSMContext):
                     raise ValueError("Город не найден. Проверьте корректность ввода.")
     except Exception as e:
         await message.answer(f"Ошибка при получении данных о погоде: {e}")
-        return
+        return  # Останавливаем выполнение, если ошибка в запросе
 
     base_water_norm = user_data['weight'] * 30
     activity_bonus = user_data['activity_level'] // 30 * 500
     hot_weather_bonus = 500 if temperature > 25 else 0
     total_water_norm = base_water_norm + activity_bonus + hot_weather_bonus
     calories = 10 * user_data['weight'] + 6.25 * user_data['height'] - 5 * user_data['age']
+
     user_data.update({
         'city': city,
         'total_water_norm': total_water_norm,
         'calories': calories,
-        'last_update': datetime.now()
+        'last_update': datetime.now(),
+        'calories_consumed': 0  # Инициализация счетчика калорий
     })
 
-    user_water_logs[message.from_user.id] = {'water_drunk': 0, **user_data}
+    user_profiles[message.from_user.id] = user_data
     await state.clear()
-
     await message.answer(
         f"Ваш профиль успешно сохранен!\n"
         f"Суточная норма воды: {total_water_norm} мл.\n"
@@ -141,12 +141,13 @@ async def log_water(message: Message):
         water = int(args[1])
         if water <= 0:
             raise ValueError("Количество воды должно быть положительным числом.")
+
         user_id = message.from_user.id
-        if user_id not in user_water_logs:
+        if user_id not in user_profiles:
             await message.answer("Ваш профиль не настроен. Введите /set_profile для настройки.")
             return
-        user_data = user_water_logs[user_id]
-        user_data['water_drunk'] += water
+        user_data = user_profiles.get(user_id, {})
+        user_data['water_drunk'] = user_data.get('water_drunk', 0) + water
         remaining_water = max(0, user_data['total_water_norm'] - user_data['water_drunk'])
         await message.answer(
             f"Вы выпили {user_data['water_drunk']} мл воды.\n"
@@ -154,7 +155,6 @@ async def log_water(message: Message):
         )
     except ValueError as e:
         await message.answer(f"Ошибка: {e}")
-
 
 # Логирование еды
 @router.message(Command('log_food'))
@@ -184,11 +184,9 @@ async def log_food(message: Message, state: FSMContext):
                         await state.update_data(calories=calories)
                     else:
                         await message.answer(f"Продукт '{product_name}' не найден.")
-                else:
-                    raise ValueError("Ошибка при запросе данных о продукте.")
+                else:raise ValueError("Ошибка при запросе данных о продукте.")
     except ValueError as e:
         await message.answer(f"Ошибка: {e}")
-
 
 # Обработка количества съеденного продукта
 @router.message(ProfileStates.waiting_for_food_amount)
@@ -205,29 +203,20 @@ async def process_food_amount(message: Message, state: FSMContext):
 
         user_id = message.from_user.id
 
-        # Если у пользователя еще нет логов калорий, создаем запись
-        if user_id not in user_calories_logs:
-            user_calories_logs[user_id] = 0
+        # Получаем профиль пользователя
+        if user_id not in user_profiles:
+            await message.answer("Ваш профиль не настроен. Введите /set_profile для настройки.")
+            return
 
+        user_data = user_profiles[user_id]
         # Добавляем калории к общей сумме
-        user_calories_logs[user_id] += total_calories
-
-        # Получаем базовую норму калорий
-        base_calories = user_data['calories']  # Это базовая норма калорий, полученная при настройке профиля
+        user_data['calories_consumed'] += total_calories
 
         # Считаем, сколько осталось до нормы
-        remaining_calories = base_calories - user_calories_logs[user_id]
-
-        # Проверка, если калории уже превышают норму
-        if remaining_calories < 0:
-            remaining_calories = 0
-
-        # Выводим, сколько калорий осталось до нормы
-        await message.answer(f"Записано: {total_calories:.2f} ккал для {amount} г.\n"
-                             f"Осталось до нормы: {remaining_calories:.2f} ккал.")
-
-        # Очистка состояния
-        await state.clear()
-
+        remaining_calories = max(0, user_data['calories'] - user_data['calories_consumed'])
+        await message.answer(
+            f"Вы съели {total_calories} ккал.\n"
+            f"Осталось до нормы: {remaining_calories} ккал."
+        )
     except ValueError as e:
         await message.answer(f"Ошибка: {e}")
