@@ -35,7 +35,7 @@ async def set_profile(message: Message, state: FSMContext):
     await state.set_state('weight')
 
 
-@router.message(StateFilter(state='weight'))
+@router.message(StateFilter(states=['weight']))
 async def process_weight(message: Message, state: FSMContext):
     weight = int(message.text)
     await state.update_data(weight=weight)
@@ -43,7 +43,7 @@ async def process_weight(message: Message, state: FSMContext):
     await state.set_state('height')
 
 
-@router.message(StateFilter(state='height'))
+@router.message(StateFilter(states=['height']))
 async def process_height(message: Message, state: FSMContext):
     height = int(message.text)
     await state.update_data(height=height)
@@ -51,7 +51,7 @@ async def process_height(message: Message, state: FSMContext):
     await state.set_state('age')
 
 
-@router.message(StateFilter(state='age'))
+@router.message(StateFilter(states=['age']))
 async def process_age(message: Message, state: FSMContext):
     age = int(message.text)
     await state.update_data(age=age)
@@ -59,7 +59,7 @@ async def process_age(message: Message, state: FSMContext):
     await state.set_state('activity')
 
 
-@router.message(StateFilter(state='activity'))
+@router.message(StateFilter(states=['activity']))
 async def process_activity(message: Message, state: FSMContext):
     activity = int(message.text)
     await state.update_data(activity=activity)
@@ -67,7 +67,7 @@ async def process_activity(message: Message, state: FSMContext):
     await state.set_state('city')
 
 
-@router.message(StateFilter(state='city'))
+@router.message(StateFilter(states=['city']))
 async def process_city(message: Message, state: FSMContext):
     city = message.text
     user_data = await state.get_data()
