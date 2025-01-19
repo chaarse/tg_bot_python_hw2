@@ -22,6 +22,9 @@ class ProfileStates(StatesGroup):
 # Хранилище для логов воды
 user_water_logs = {}
 
+# Хранилище для суммарных калорий от еды
+user_calories_logs = {}
+
 # Команда /start
 @router.message(Command('start'))
 async def cmd_start(message: Message):
@@ -30,7 +33,10 @@ async def cmd_start(message: Message):
 # Команда /help
 @router.message(Command('help'))
 async def cmd_help(message: Message):
-    await message.reply("Команды:\n/set_profile - Настроить профиль\n/log_water <количество> - Логировать воду\n/check_progress - Проверить прогресс")
+    await message.reply("Команды:\n/set_profile - Настроить профиль\n"
+                        "/log_water <количество> - Логировать воду\n"
+                        "/log_food <название продукта> - Логировать еду\n"
+                        "/check_progress - Проверить прогресс")
 
 # Настройка профиля
 @router.message(Command('set_profile'))
@@ -148,7 +154,8 @@ async def log_water(message: Message):
     except ValueError as e:
         await message.answer(f"Ошибка: {e}")
 
-# Лог еды
+
+# Логирование еды
 @router.message(Command('log_food'))
 async def log_food(message: Message, state: FSMContext):
     try:
@@ -173,7 +180,7 @@ async def log_food(message: Message, state: FSMContext):
                             return
                         await message.answer(f"🍌 {food_name} — {calories} ккал на 100 г. Сколько грамм вы съели?")
                         await state.set_state(ProfileStates.waiting_for_food_amount)
-                        await state.update_data(calories=calories, food_name=food_name)
+                        await state.update_data(calories=calories)
                     else:
                         await message.answer(f"Продукт '{product_name}' не найден.")
                 else:
@@ -181,18 +188,36 @@ async def log_food(message: Message, state: FSMContext):
     except ValueError as e:
         await message.answer(f"Ошибка: {e}")
 
+
+# Обработка количества съеденного продукта
 @router.message(ProfileStates.waiting_for_food_amount)
 async def process_food_amount(message: Message, state: FSMContext):
     try:
         amount = int(message.text)
         if amount <= 0:
             raise ValueError("Количество продукта должно быть положительным числом.")
+
         user_data = await state.get_data()
         calories_per_100g = user_data['calories']
-        food_name = user_data['food_name']
         total_calories = (calories_per_100g * amount) / 100
-        await message.answer(f"Записано: {total_calories} ккал от {food_name}.")
-        # Здесь можно добавить логику для хранения данных, если необходимо.
+
+        user_id = message.from_user.id
+
+        # Если у пользователя еще нет логов калорий, создаем запись
+        if user_id not in user_calories_logs:
+            user_calories_logs[user_id] = 0
+
+        # Добавляем калории к общей сумме
+        user_calories_logs[user_id] += total_calories
+
+        # Выводим текущие калории для пользователя
+        await message.answer(f"Записано: {total_calories:.2f} ккал для {amount} г.")
+
+        # Выводим общее количество потребленных калорий
+        total_consumed_calories = user_calories_logs[user_id]
+        await message.answer(f"Общее количество потребленных калорий: {total_consumed_calories:.2f} ккал.")
+
+        # Очистка состояния
         await state.clear()
     except ValueError as e:
         await message.answer(f"Ошибка: {e}")
