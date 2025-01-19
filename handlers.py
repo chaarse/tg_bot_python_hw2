@@ -5,17 +5,19 @@ from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import Message
 import aiohttp
 from config import WEATHER_API_KEY
+import datetime
 
 
 API_KEY = WEATHER_API_KEY
 
-# Данные о пользователи
+
+# Создаем состояния для FSM
 class ProfileStates(StatesGroup):
-    waiting_for_weight = State()  # вес
-    waiting_for_height = State()  # рост
-    waiting_for_age = State()  # возраст
-    waiting_for_activity_level = State()  # уровень активности
-    waiting_for_city = State()  # название города
+    waiting_for_weight = State()  # Ожидание ввода веса
+    waiting_for_height = State()  # Ожидание ввода роста
+    waiting_for_age = State()  # Ожидание ввода возраста
+    waiting_for_activity_level = State()  # Ожидание уровня активности
+    waiting_for_city = State()  # Ожидание города
 
 
 # Меню для выбора команд
@@ -25,6 +27,8 @@ menu_keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True).add(types.Keyboa
                                                                     types.KeyboardButton('/log_workout'),
                                                                     types.KeyboardButton('/check_progress'))
 
+router = Router()
+
 
 @router.message(Command('start'))
 async def cmd_start(message: Message, state: FSMContext):
@@ -32,7 +36,7 @@ async def cmd_start(message: Message, state: FSMContext):
     async with state.proxy() as data:
         if 'last_interaction' in data and (
                 datetime.datetime.now() - data['last_interaction']).total_seconds() < 86400:  # 24 часа
-            await message.reply("Привет! Продолжаем работу (я обновляюсь каждый 24 часа).", reply_markup=menu_keyboard)
+            await message.reply("Привет! Продолжаем работу.", reply_markup=menu_keyboard)
         else:
             await state.clear()
             await message.reply("Привет! Я бот для расчета нормы воды и калорий. Начнем с создания профиля?",
@@ -194,8 +198,3 @@ async def log_water(message: Message, state: FSMContext):
             f"Осталось выпить: {remaining_water} мл.",
             reply_markup=menu_keyboard
         )
-
-
-if __name__ == '__main__':
-    dp.include_router(router)
-    start_polling(dp, skip_updates=True)
