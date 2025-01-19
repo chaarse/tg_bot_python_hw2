@@ -1,18 +1,26 @@
-from aiogram import Router
-from aiogram.types import Message, InlineKeyboardMarkup
+from aiogram import Router, types
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import StatesGroup, State
+from aiogram.types import Message
 import aiohttp
 
-router = Router()
 
-# Словарь для хранения данных пользователей
-users = {}
+# Создаем состояния для FSM
+class ProfileStates(StatesGroup):
+    waiting_for_weight = State()  # Ожидание ввода веса
+    waiting_for_height = State()  # Ожидание ввода роста
+    waiting_for_age = State()  # Ожидание ввода возраста
+    waiting_for_activity_level = State()  # Ожидание уровня активности
+    waiting_for_city = State()  # Ожидание города
+
+
+router = Router()
 
 
 @router.message(Command('start'))
 async def cmd_start(message: Message):
-    await message.reply("Привет!\n Я бот для расчета нормы воды и калорий.\n Введите /help для получения списка команд.")
+    await message.reply("Привет! Я бот для расчета нормы воды и калорий. Введите /help для получения списка команд.")
 
 
 @router.message(Command('help'))
@@ -29,66 +37,82 @@ async def cmd_help(message: Message):
 
 @router.message(Command('set_profile'))
 async def set_profile(message: Message, state: FSMContext):
-    await message.reply("Введите ваш вес (в кг):")
-    await state.set_state('weight')
+    await state.set_state(ProfileStates.waiting_for_weight)
+    await message.answer("Введите свой вес в килограммах:")
 
 
-@router.message(state='weight')
+@router.message(ProfileStates.waiting_for_weight)
 async def process_weight(message: Message, state: FSMContext):
-    weight = int(message.text)
-    await state.update_data(weight=weight)
-    await message.reply("Введите ваш рост (в см):")
-    await state.set_state('height')
+    try:
+        weight = float(message.text)
+        if weight <= 0:
+            raise ValueError("Вес должен быть положительным числом")
+
+        await state.update_data(weight=weight)
+        await state.set_state(ProfileStates.waiting_for_height)
+        await message.answer("Теперь введите свой рост в сантиметрах:")
+
+    except ValueError as e:
+        await message.answer(f"Неверный формат веса. Попробуйте еще раз: {e}")
 
 
-@router.message(state='height')
+@router.message(ProfileStates.waiting_for_height)
 async def process_height(message: Message, state: FSMContext):
-    height = int(message.text)
-    await state.update_data(height=height)
-    await message.reply("Введите ваш возраст:")
-    await state.set_state('age')
+    try:
+        height = int(message.text)
+        if height <= 0:
+            raise ValueError("Рост должен быть положительным числом")
+
+        await state.update_data(height=height)
+        await state.set_state(ProfileStates.waiting_for_age)
+        await message.answer("Отлично! Теперь введите свой возраст:")
+
+    except ValueError as e:
+        await message.answer(f"Неверный формат роста. Попробуйте еще раз: {e}")
 
 
-@router.message(state='age')
+@router.message(ProfileStates.waiting_for_age)
 async def process_age(message: Message, state: FSMContext):
-    age = int(message.text)
-    await state.update_data(age=age)
-    await message.reply("Сколько минут активности у вас в день?")
-    await state.set_state('activity')
+    try:
+        age = int(message.text)
+        if age <= 0 or age > 120:
+            raise ValueError("Возраст должен быть положительным числом и меньше 121 года")
+
+        await state.update_data(age=age)
+        await state.set_state(ProfileStates.waiting_for_activity_level)
+        await message.answer(
+            "И последний шаг перед городом: сколько минут физической активности у вас в среднем за день?")
+
+    except ValueError as e:
+        await message.answer(f"Неверный формат возраста. Попробуйте еще раз: {e}")
 
 
-@router.message(state='activity')
-async def process_activity(message: Message, state: FSMContext):
-    activity = int(message.text)
-    await state.update_data(activity=activity)
-    await message.reply("В каком городе вы находитесь?")
-    await state.set_state('city')
+@router.message(ProfileStates.waiting_for_activity_level)
+async def process_activity_level(message: Message, state: FSMContext):
+    try:
+        activity_level = int(message.text)
+        if activity_level < 0:
+            raise ValueError("Уровень активности должен быть неотрицательным числом")
+
+        await state.update_data(activity_level=activity_level)
+        await state.set_state(ProfileStates.waiting_for_city)
+        await message.answer("Наконец, напишите город вашего проживания:")
+
+    except ValueError as e:
+        await message.answer(f"Неверный формат уровня активности. Попробуйте еще раз: {e}")
 
 
-@router.message(state='city')
+@router.message(ProfileStates.waiting_for_city)
 async def process_city(message: Message, state: FSMContext):
-    city = message.text
+    city = message.text.strip().title()
     user_data = await state.get_data()
 
-    weight = user_data['weight']
-    height = user_data['height']
-    age = user_data['age']
-    activity = user_data['activity']
-
-    water_goal = weight * 30 + (500 * (activity // 30))  # Норма воды
-    calorie_goal = 10 * weight + 6.25 * height - 5 * age  # Норма калорий
-
-    users[message.from_user.id] = {
-        "weight": weight,
-        "height": height,
-        "age": age,
-        "activity": activity,
-        "city": city,
-        "water_goal": water_goal,
-        "calorie_goal": calorie_goal,
-        "logged_water": 0,
-        "logged_calories": 0,
-        "burned_calories": 0
-    }
-
-    await message.reply("Ваш профиль настроен.")
+    await state.clear()
+    await message.answer(
+        f"Ваш профиль успешно сохранен!\n"
+        f"Вес: {user_data['weight']} кг\n"
+        f"Рост: {user_data['height']} см\n"
+        f"Возраст: {user_data['age']}\n"
+        f"Уровень активности: {user_data['activity_level']} мин/день\n"
+        f"Город: {city}"
+    )
