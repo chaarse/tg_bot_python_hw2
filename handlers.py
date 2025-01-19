@@ -1,6 +1,6 @@
 from aiogram import Router
 from aiogram.types import Message, InlineKeyboardMarkup
-from aiogram.filters import Command, StateFilter
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 import aiohttp
 
@@ -9,11 +9,13 @@ router = Router()
 # Словарь для хранения данных пользователей
 users = {}
 
+
 # Обработчик команды /start
 @router.message(Command('start'))
 async def cmd_start(message: Message):
     await message.reply("Привет! Я твой бот для расчета нормы воды, калорий и трекинга активности. \nВведи /help для "
                         "получения списка доступных команд.")
+
 
 # Обработчик команды /help
 @router.message(Command('help'))
@@ -35,40 +37,85 @@ async def set_profile(message: Message, state: FSMContext):
     await state.set_state('weight')
 
 
-@router.message(StateFilter(states=['weight']))
+@router.message()
 async def process_weight(message: Message, state: FSMContext):
-    weight = int(message.text)
+    current_state = await state.get_state()
+
+    if current_state is None or current_state != 'weight':
+        return
+
+    try:
+        weight = int(message.text)
+    except ValueError:
+        await message.reply("Пожалуйста, введите корректный вес в килограммах.")
+        return
+
     await state.update_data(weight=weight)
     await message.reply("Введите ваш рост (в см):")
     await state.set_state('height')
 
 
-@router.message(StateFilter(states=['height']))
+@router.message()
 async def process_height(message: Message, state: FSMContext):
-    height = int(message.text)
+    current_state = await state.get_state()
+
+    if current_state is None or current_state != 'height':
+        return
+
+    try:
+        height = int(message.text)
+    except ValueError:
+        await message.reply("Пожалуйста, введите корректный рост в сантиметрах.")
+        return
+
     await state.update_data(height=height)
     await message.reply("Введите ваш возраст:")
     await state.set_state('age')
 
 
-@router.message(StateFilter(states=['age']))
+@router.message()
 async def process_age(message: Message, state: FSMContext):
-    age = int(message.text)
+    current_state = await state.get_state()
+
+    if current_state is None or current_state != 'age':
+        return
+
+    try:
+        age = int(message.text)
+    except ValueError:
+        await message.reply("Пожалуйста, введите корректный возраст.")
+        return
+
     await state.update_data(age=age)
     await message.reply("Сколько минут активности у вас в день?")
     await state.set_state('activity')
 
 
-@router.message(StateFilter(states=['activity']))
+@router.message()
 async def process_activity(message: Message, state: FSMContext):
-    activity = int(message.text)
+    current_state = await state.get_state()
+
+    if current_state is None or current_state != 'activity':
+        return
+
+    try:
+        activity = int(message.text)
+    except ValueError:
+        await message.reply("Пожалуйста, введите количество минут активности.")
+        return
+
     await state.update_data(activity=activity)
     await message.reply("В каком городе вы находитесь?")
     await state.set_state('city')
 
 
-@router.message(StateFilter(states=['city']))
+@router.message()
 async def process_city(message: Message, state: FSMContext):
+    current_state = await state.get_state()
+
+    if current_state is None or current_state != 'city':
+        return
+
     city = message.text
     user_data = await state.get_data()
 
