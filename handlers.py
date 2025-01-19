@@ -17,6 +17,7 @@ class ProfileStates(StatesGroup):
     waiting_for_age = State()
     waiting_for_activity_level = State()
     waiting_for_city = State()
+    waiting_for_food_amount = State()
 
 # Хранилище для логов воды
 user_water_logs = {}
