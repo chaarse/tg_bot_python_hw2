@@ -193,14 +193,16 @@ async def log_food(message: Message, state: FSMContext):
 async def process_food_amount(message: Message, state: FSMContext):
     try:
         amount = int(message.text)
+
         if amount <= 0:
             raise ValueError("Количество продукта должно быть положительным числом.")
 
         # Получаем данные из состояния
         user_data = await state.get_data()
         calories_per_100g = user_data['calories']
-        total_calories = (calories_per_100g * amount) / 100
 
+        # Считаем общее количество калорий
+        total_calories = (calories_per_100g * amount) / 100
         user_id = message.from_user.id
 
         # Получаем профиль пользователя
@@ -209,11 +211,16 @@ async def process_food_amount(message: Message, state: FSMContext):
             return
 
         user_data = user_profiles[user_id]
+
         # Добавляем калории к общей сумме
         user_data['calories_consumed'] += total_calories
 
         # Считаем, сколько осталось до нормы
         remaining_calories = max(0, user_data['calories'] - user_data['calories_consumed'])
+
+        # Обновляем профиль пользователя
+        user_profiles[user_id] = user_data
+
         await message.answer(
             f"Вы съели {total_calories} ккал.\n"
             f"Осталось до нормы: {remaining_calories} ккал."
