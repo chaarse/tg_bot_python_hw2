@@ -4,7 +4,10 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import Message
 import aiohttp
+from config import WEATHER_API_KEY
 
+
+API_KEY = WEATHER_API_KEY
 
 # Создаем состояния для FSM
 class ProfileStates(StatesGroup):
@@ -20,7 +23,8 @@ router = Router()
 
 @router.message(Command('start'))
 async def cmd_start(message: Message):
-    await message.reply("Привет! Я бот для расчета нормы воды и калорий. Введите /help для получения списка команд.")
+    await message.reply("Привет!\n Я бот для расчёта нормы воды, калорий и трекинга активности.\n Введите /help для"
+                        " получения списка команд.")
 
 
 @router.message(Command('help'))
@@ -107,6 +111,19 @@ async def process_city(message: Message, state: FSMContext):
     city = message.text.strip().title()
     user_data = await state.get_data()
 
+    async with aiohttp.ClientSession() as session:
+        url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={API_KEY}&units=metric"
+        async with session.get(url) as resp:
+            weather_data = await resp.json()
+            temperature = weather_data['main']['temp']
+
+    base_water_norm = user_data['weight'] * 30
+    activity_bonus = user_data['activity_level'] // 30 * 500
+    hot_weather_bonus = 500 if temperature > 25 else 0
+
+    total_water_norm = base_water_norm + activity_bonus + hot_weather_bonus
+    calories = 10 * user_data['weight'] + 6.25 * user_data['height'] - 5 * user_data['age']
+
     await state.clear()
     await message.answer(
         f"Ваш профиль успешно сохранен!\n"
@@ -114,5 +131,7 @@ async def process_city(message: Message, state: FSMContext):
         f"Рост: {user_data['height']} см\n"
         f"Возраст: {user_data['age']}\n"
         f"Уровень активности: {user_data['activity_level']} мин/день\n"
-        f"Город: {city}"
+        f"Город: {city}\n"
+        f"\nСуточная норма воды: {total_water_norm} мл.\n"
+        f"Базовая норма калорий: {calories} ккал."
     )
