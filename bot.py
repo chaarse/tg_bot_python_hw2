@@ -3,15 +3,15 @@ from handlers import router
 import asyncio
 from config import API_TOKEN
 
-# Инициализация бота и диспетчера
+# Создание бота и диспетчера
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 dp.include_router(router)
 
-# Главная функция запуска
+# Функция для запуска бота
 async def main():
-    print("Бот запущен!")
+    print('Бот запущен!')
     await dp.start_polling(bot)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     asyncio.run(main())
