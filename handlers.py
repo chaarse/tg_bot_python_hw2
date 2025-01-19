@@ -161,6 +161,3 @@ async def clear_old_data():
             if (now - data['last_update']).total_seconds() > 86400:  # 24 часа
                 del user_water_logs[user_id]
         await asyncio.sleep(3600)  # Проверяем раз в час
-
-# Запуск фона для очистки данных
-asyncio.create_task(clear_old_data())
