@@ -198,6 +198,7 @@ async def process_food_amount(message: Message, state: FSMContext):
         if amount <= 0:
             raise ValueError("Количество продукта должно быть положительным числом.")
 
+        # Получаем данные из состояния
         user_data = await state.get_data()
         calories_per_100g = user_data['calories']
         total_calories = (calories_per_100g * amount) / 100
@@ -211,9 +212,8 @@ async def process_food_amount(message: Message, state: FSMContext):
         # Добавляем калории к общей сумме
         user_calories_logs[user_id] += total_calories
 
-        # Получаем базовую норму калорий (можно заменить на норму, вычисляемую по вашему алгоритму)
-        user_data = await state.get_data()
-        base_calories = user_data['calories']  # Можно добавить вашу логику для вычисления базовой нормы
+        # Получаем базовую норму калорий
+        base_calories = user_data['calories']  # Это базовая норма калорий, полученная при настройке профиля
 
         # Считаем, сколько осталось до нормы
         remaining_calories = base_calories - user_calories_logs[user_id]
@@ -228,5 +228,6 @@ async def process_food_amount(message: Message, state: FSMContext):
 
         # Очистка состояния
         await state.clear()
+
     except ValueError as e:
         await message.answer(f"Ошибка: {e}")
