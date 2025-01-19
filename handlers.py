@@ -211,12 +211,20 @@ async def process_food_amount(message: Message, state: FSMContext):
         # Добавляем калории к общей сумме
         user_calories_logs[user_id] += total_calories
 
-        # Выводим текущие калории для пользователя
-        await message.answer(f"Записано: {total_calories:.2f} ккал для {amount} г.")
+        # Получаем базовую норму калорий (можно заменить на норму, вычисляемую по вашему алгоритму)
+        user_data = await state.get_data()
+        base_calories = user_data['calories']  # Можно добавить вашу логику для вычисления базовой нормы
 
-        # Выводим общее количество потребленных калорий
-        total_consumed_calories = user_calories_logs[user_id]
-        await message.answer(f"Общее количество потребленных калорий: {total_consumed_calories:.2f} ккал.")
+        # Считаем, сколько осталось до нормы
+        remaining_calories = base_calories - user_calories_logs[user_id]
+
+        # Проверка, если калории уже превышают норму
+        if remaining_calories < 0:
+            remaining_calories = 0
+
+        # Выводим, сколько калорий осталось до нормы
+        await message.answer(f"Записано: {total_calories:.2f} ккал для {amount} г.\n"
+                             f"Осталось до нормы: {remaining_calories:.2f} ккал.")
 
         # Очистка состояния
         await state.clear()
