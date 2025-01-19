@@ -3,14 +3,12 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import Message
-from aiogram.fsm.storage.memory import MemoryStorage
 import aiohttp
 from datetime import datetime
 from config import WEATHER_API_KEY
 
 API_KEY = WEATHER_API_KEY
 router = Router()
-storage = MemoryStorage()
 
 # Состояния пользователя
 class ProfileStates(StatesGroup):
@@ -26,20 +24,12 @@ user_water_logs = {}
 # Команда /start
 @router.message(Command('start'))
 async def cmd_start(message: Message):
-    await message.reply(
-        "Привет!\nЯ бот для расчёта нормы воды, калорий и трекинга активности.\n"
-        "Введите /help для получения списка команд."
-    )
+    await message.reply("Привет! Я бот для расчёта нормы воды, калорий и трекинга активности.\nВведите /help для получения списка команд.")
 
 # Команда /help
 @router.message(Command('help'))
 async def cmd_help(message: Message):
-    await message.reply(
-        "Команды:\n"
-        "/set_profile - Настроить профиль\n"
-        "/log_water <количество> - Логировать воду\n"
-        "/check_progress - Проверить прогресс"
-    )
+    await message.reply("Команды:\n/set_profile - Настроить профиль\n/log_water <количество> - Логировать воду\n/check_progress - Проверить прогресс")
 
 # Настройка профиля
 @router.message(Command('set_profile'))
@@ -99,7 +89,6 @@ async def process_activity_level(message: Message, state: FSMContext):
 async def process_city(message: Message, state: FSMContext):
     city = message.text.strip().title()
     user_data = await state.get_data()
-
     try:
         async with aiohttp.ClientSession() as session:
             url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={API_KEY}&units=metric"
@@ -118,16 +107,16 @@ async def process_city(message: Message, state: FSMContext):
     hot_weather_bonus = 500 if temperature > 25 else 0
     total_water_norm = base_water_norm + activity_bonus + hot_weather_bonus
     calories = 10 * user_data['weight'] + 6.25 * user_data['height'] - 5 * user_data['age']
-
     user_data.update({
         'city': city,
         'total_water_norm': total_water_norm,
         'calories': calories,
         'last_update': datetime.now()
     })
-    user_water_logs[message.from_user.id] = {'water_drunk': 0, **user_data}
 
+    user_water_logs[message.from_user.id] = {'water_drunk': 0, **user_data}
     await state.clear()
+
     await message.answer(
         f"Ваш профиль успешно сохранен!\n"
         f"Суточная норма воды: {total_water_norm} мл.\n"
@@ -144,19 +133,65 @@ async def log_water(message: Message):
         water = int(args[1])
         if water <= 0:
             raise ValueError("Количество воды должно быть положительным числом.")
-
         user_id = message.from_user.id
         if user_id not in user_water_logs:
             await message.answer("Ваш профиль не настроен. Введите /set_profile для настройки.")
             return
-
         user_data = user_water_logs[user_id]
         user_data['water_drunk'] += water
         remaining_water = max(0, user_data['total_water_norm'] - user_data['water_drunk'])
-
         await message.answer(
             f"Вы выпили {user_data['water_drunk']} мл воды.\n"
             f"Осталось выпить: {remaining_water} мл до выполнения нормы."
         )
+    except ValueError as e:
+        await message.answer(f"Ошибка: {e}")
+
+# Лог еды
+@router.message(Command('log_food'))
+async def log_food(message: Message, state: FSMContext):
+    try:
+        args = message.text.split()
+        if len(args) < 2:
+            raise ValueError("Укажите название продукта.")
+        product_name = " ".join(args[1:])
+
+        # Запрос информации о продукте
+        async with aiohttp.ClientSession() as session:
+            url = f"https://world.openfoodfacts.org/cgi/search.pl?action=process&search_terms={product_name}&json=true"
+            async with session.get(url) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    products = data.get('products', [])
+                    if products:
+                        first_product = products[0]
+                        food_name = first_product.get('product_name', 'Неизвестно')
+                        calories = first_product.get('nutriments', {}).get('energy-kcal_100g', 0)
+                        if calories == 0:
+                            await message.answer(f"Не удалось найти калорийность для продукта '{food_name}'.")
+                            return
+                        await message.answer(f"🍌 {food_name} — {calories} ккал на 100 г. Сколько грамм вы съели?")
+                        await state.set_state(ProfileStates.waiting_for_food_amount)
+                        await state.update_data(calories=calories, food_name=food_name)
+                    else:
+                        await message.answer(f"Продукт '{product_name}' не найден.")
+                else:
+                    raise ValueError("Ошибка при запросе данных о продукте.")
+    except ValueError as e:
+        await message.answer(f"Ошибка: {e}")
+
+@router.message(ProfileStates.waiting_for_food_amount)
+async def process_food_amount(message: Message, state: FSMContext):
+    try:
+        amount = int(message.text)
+        if amount <= 0:
+            raise ValueError("Количество продукта должно быть положительным числом.")
+        user_data = await state.get_data()
+        calories_per_100g = user_data['calories']
+        food_name = user_data['food_name']
+        total_calories = (calories_per_100g * amount) / 100
+        await message.answer(f"Записано: {total_calories} ккал от {food_name}.")
+        # Здесь можно добавить логику для хранения данных, если необходимо.
+        await state.clear()
     except ValueError as e:
         await message.answer(f"Ошибка: {e}")
