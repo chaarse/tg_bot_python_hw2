@@ -184,7 +184,8 @@ async def log_food(message: Message, state: FSMContext):
                         await state.update_data(calories=calories)
                     else:
                         await message.answer(f"Продукт '{product_name}' не найден.")
-                else:raise ValueError("Ошибка при запросе данных о продукте.")
+                else:
+                    raise ValueError("Ошибка при запросе данных о продукте.")
     except ValueError as e:
         await message.answer(f"Ошибка: {e}")
 
