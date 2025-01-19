@@ -9,40 +9,53 @@ from config import WEATHER_API_KEY
 
 API_KEY = WEATHER_API_KEY
 
-# Создаем состояния для FSM
+# Данные о пользователи
 class ProfileStates(StatesGroup):
-    waiting_for_weight = State()  # Ожидание ввода веса
-    waiting_for_height = State()  # Ожидание ввода роста
-    waiting_for_age = State()  # Ожидание ввода возраста
-    waiting_for_activity_level = State()  # Ожидание уровня активности
-    waiting_for_city = State()  # Ожидание города
+    waiting_for_weight = State()  # вес
+    waiting_for_height = State()  # рост
+    waiting_for_age = State()  # возраст
+    waiting_for_activity_level = State()  # уровень активности
+    waiting_for_city = State()  # название города
 
 
-router = Router()
+# Меню для выбора команд
+menu_keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True).add(types.KeyboardButton('/set_profile'),
+                                                                    types.KeyboardButton('/log_water'),
+                                                                    types.KeyboardButton('/log_food'),
+                                                                    types.KeyboardButton('/log_workout'),
+                                                                    types.KeyboardButton('/check_progress'))
 
 
 @router.message(Command('start'))
-async def cmd_start(message: Message):
-    await message.reply("Привет!\n Я бот для расчёта нормы воды, калорий и трекинга активности.\n Введите /help для"
-                        " получения списка команд.")
+async def cmd_start(message: Message, state: FSMContext):
+    chat_id = str(message.from_user.id)
+    async with state.proxy() as data:
+        if 'last_interaction' in data and (
+                datetime.datetime.now() - data['last_interaction']).total_seconds() < 86400:  # 24 часа
+            await message.reply("Привет! Продолжаем работу (я обновляюсь каждый 24 часа).", reply_markup=menu_keyboard)
+        else:
+            await state.clear()
+            await message.reply("Привет! Я бот для расчета нормы воды и калорий. Начнем с создания профиля?",
+                                reply_markup=menu_keyboard)
 
 
 @router.message(Command('help'))
 async def cmd_help(message: Message):
     await message.reply(
-        'Команды:\n'
+        'Доступные команды:\n'
         '/set_profile - Настроить профиль\n'
         '/log_water <количество> - Логировать воду\n'
         '/log_food <название продукта> - Логировать еду\n'
         '/log_workout <тип тренировки> <время (мин)> - Логировать тренировку\n'
-        '/check_progress - Проверить прогресс\n'
+        '/check_progress - Проверить прогресс\n',
+        reply_markup=menu_keyboard
     )
 
 
 @router.message(Command('set_profile'))
 async def set_profile(message: Message, state: FSMContext):
     await state.set_state(ProfileStates.waiting_for_weight)
-    await message.answer("Введите свой вес в килограммах:")
+    await message.answer("Введите свой вес в килограммах:", reply_markup=types.ReplyKeyboardRemove())
 
 
 @router.message(ProfileStates.waiting_for_weight)
@@ -100,7 +113,7 @@ async def process_activity_level(message: Message, state: FSMContext):
 
         await state.update_data(activity_level=activity_level)
         await state.set_state(ProfileStates.waiting_for_city)
-        await message.answer("Наконец, напишите город вашего проживания:")
+        await message.answer("Наконец, напишите город своего проживания:")
 
     except ValueError as e:
         await message.answer(f"Неверный формат уровня активности. Попробуйте еще раз: {e}")
@@ -124,6 +137,17 @@ async def process_city(message: Message, state: FSMContext):
     total_water_norm = base_water_norm + activity_bonus + hot_weather_bonus
     calories = 10 * user_data['weight'] + 6.25 * user_data['height'] - 5 * user_data['age']
 
+    await state.update_data(profile={
+        'weight': user_data['weight'],
+        'height': user_data['height'],
+        'age': user_data['age'],
+        'activity_level': user_data['activity_level'],
+        'city': city,
+        'water_norm': total_water_norm,
+        'calories_norm': calories,
+        'water_consumed': 0,
+        'last_interaction': datetime.datetime.now()
+    })
     await state.clear()
     await message.answer(
         f"Ваш профиль успешно сохранен!\n"
@@ -133,5 +157,45 @@ async def process_city(message: Message, state: FSMContext):
         f"Уровень активности: {user_data['activity_level']} мин/день\n"
         f"Город: {city}\n"
         f"\nСуточная норма воды: {total_water_norm} мл.\n"
-        f"Базовая норма калорий: {calories} ккал."
+        f"Базовая норма калорий: {calories} ккал.",
+        reply_markup=menu_keyboard
     )
+
+
+@router.message(Command('log_water'))
+async def log_water(message: Message, state: FSMContext):
+    async with state.proxy() as data:
+        if 'profile' not in data or (
+                datetime.datetime.now() - data['last_interaction']).total_seconds() >= 86400:  # 24 часа
+            await message.answer("Пожалуйста, сначала настройте свой профиль через команду /set_profile.",
+                                 reply_markup=menu_keyboard)
+            return
+
+        profile = data['profile']
+        water_consumed = profile.get('water_consumed', 0)
+        water_norm = profile['water_norm']
+
+        try:
+            water_amount = float(message.text.split()[1])
+            if water_amount <= 0:
+                raise ValueError("Количество воды должно быть положительным числом")
+        except (IndexError, ValueError) as e:
+            await message.answer(f"Неверный формат количества воды. Попробуйте снова: {e}", reply_markup=menu_keyboard)
+            return
+
+        water_consumed += water_amount
+        remaining_water = water_norm - water_consumed
+
+        profile['water_consumed'] = water_consumed
+        profile['last_interaction'] = datetime.datetime.now()
+
+        await message.answer(
+            f"Вы уже выпили {water_consumed} мл воды.\n"
+            f"Осталось выпить: {remaining_water} мл.",
+            reply_markup=menu_keyboard
+        )
+
+
+if __name__ == '__main__':
+    dp.include_router(router)
+    start_polling(dp, skip_updates=True)
