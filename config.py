@@ -4,8 +4,8 @@ import os
 load_dotenv()
 
 API_TOKEN = os.getenv('BOT_TOKEN')
-WEATHER_API_KEY = os.getenv('WEATHER_API_KEY')
-CALORIES_API_KEY = os.getenv('CALORIES_API_KEY')
+# WEATHER_API_KEY = os.getenv('WEATHER_API_KEY')
+# CALORIES_API_KEY = os.getenv('CALORIES_API_KEY')
 
 
 if not API_TOKEN:
