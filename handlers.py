@@ -10,14 +10,11 @@ router = Router()
 users = {}
 
 
-# Обработчик команды /start
 @router.message(Command('start'))
 async def cmd_start(message: Message):
-    await message.reply("Привет! Я твой бот для расчета нормы воды, калорий и трекинга активности. \nВведи /help для "
-                        "получения списка доступных команд.")
+    await message.reply("Привет!\n Я бот для расчета нормы воды и калорий.\n Введите /help для получения списка команд.")
 
 
-# Обработчик команды /help
 @router.message(Command('help'))
 async def cmd_help(message: Message):
     await message.reply(
@@ -30,92 +27,46 @@ async def cmd_help(message: Message):
     )
 
 
-# Обработчик команды /set_profile
 @router.message(Command('set_profile'))
 async def set_profile(message: Message, state: FSMContext):
     await message.reply("Введите ваш вес (в кг):")
     await state.set_state('weight')
 
 
-@router.message()
+@router.message(state='weight')
 async def process_weight(message: Message, state: FSMContext):
-    current_state = await state.get_state()
-
-    if current_state is None or current_state != 'weight':
-        return
-
-    try:
-        weight = int(message.text)
-    except ValueError:
-        await message.reply("Пожалуйста, введите корректный вес в килограммах.")
-        return
-
+    weight = int(message.text)
     await state.update_data(weight=weight)
     await message.reply("Введите ваш рост (в см):")
     await state.set_state('height')
 
 
-@router.message()
+@router.message(state='height')
 async def process_height(message: Message, state: FSMContext):
-    current_state = await state.get_state()
-
-    if current_state is None or current_state != 'height':
-        return
-
-    try:
-        height = int(message.text)
-    except ValueError:
-        await message.reply("Пожалуйста, введите корректный рост в сантиметрах.")
-        return
-
+    height = int(message.text)
     await state.update_data(height=height)
     await message.reply("Введите ваш возраст:")
     await state.set_state('age')
 
 
-@router.message()
+@router.message(state='age')
 async def process_age(message: Message, state: FSMContext):
-    current_state = await state.get_state()
-
-    if current_state is None or current_state != 'age':
-        return
-
-    try:
-        age = int(message.text)
-    except ValueError:
-        await message.reply("Пожалуйста, введите корректный возраст.")
-        return
-
+    age = int(message.text)
     await state.update_data(age=age)
     await message.reply("Сколько минут активности у вас в день?")
     await state.set_state('activity')
 
 
-@router.message()
+@router.message(state='activity')
 async def process_activity(message: Message, state: FSMContext):
-    current_state = await state.get_state()
-
-    if current_state is None or current_state != 'activity':
-        return
-
-    try:
-        activity = int(message.text)
-    except ValueError:
-        await message.reply("Пожалуйста, введите количество минут активности.")
-        return
-
+    activity = int(message.text)
     await state.update_data(activity=activity)
     await message.reply("В каком городе вы находитесь?")
     await state.set_state('city')
 
 
-@router.message()
+@router.message(state='city')
 async def process_city(message: Message, state: FSMContext):
-    current_state = await state.get_state()
-
-    if current_state is None or current_state != 'city':
-        return
-
     city = message.text
     user_data = await state.get_data()
 
@@ -124,8 +75,8 @@ async def process_city(message: Message, state: FSMContext):
     age = user_data['age']
     activity = user_data['activity']
 
-    water_goal = weight * 30 + (500 * (activity // 30))  # Рассчитываем норму воды
-    calorie_goal = 10 * weight + 6.25 * height - 5 * age  # Рассчитываем норму калорий
+    water_goal = weight * 30 + (500 * (activity // 30))  # Норма воды
+    calorie_goal = 10 * weight + 6.25 * height - 5 * age  # Норма калорий
 
     users[message.from_user.id] = {
         "weight": weight,
@@ -140,4 +91,4 @@ async def process_city(message: Message, state: FSMContext):
         "burned_calories": 0
     }
 
-    await message.reply("Ваш профиль установлен.")
+    await message.reply("Ваш профиль настроен.")
