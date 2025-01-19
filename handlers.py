@@ -1,6 +1,6 @@
 from aiogram import Router
 from aiogram.types import Message, InlineKeyboardMarkup
-from aiogram.filters import Command
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 import aiohttp
 
@@ -35,7 +35,7 @@ async def set_profile(message: Message, state: FSMContext):
     await state.set_state('weight')
 
 
-@router.message(state='weight')
+@router.message(StateFilter(state='weight'))
 async def process_weight(message: Message, state: FSMContext):
     weight = int(message.text)
     await state.update_data(weight=weight)
@@ -43,7 +43,7 @@ async def process_weight(message: Message, state: FSMContext):
     await state.set_state('height')
 
 
-@router.message(state='height')
+@router.message(StateFilter(state='height'))
 async def process_height(message: Message, state: FSMContext):
     height = int(message.text)
     await state.update_data(height=height)
@@ -51,7 +51,7 @@ async def process_height(message: Message, state: FSMContext):
     await state.set_state('age')
 
 
-@router.message(state='age')
+@router.message(StateFilter(state='age'))
 async def process_age(message: Message, state: FSMContext):
     age = int(message.text)
     await state.update_data(age=age)
@@ -59,7 +59,7 @@ async def process_age(message: Message, state: FSMContext):
     await state.set_state('activity')
 
 
-@router.message(state='activity')
+@router.message(StateFilter(state='activity'))
 async def process_activity(message: Message, state: FSMContext):
     activity = int(message.text)
     await state.update_data(activity=activity)
@@ -67,7 +67,7 @@ async def process_activity(message: Message, state: FSMContext):
     await state.set_state('city')
 
 
-@router.message(state='city')
+@router.message(StateFilter(state='city'))
 async def process_city(message: Message, state: FSMContext):
     city = message.text
     user_data = await state.get_data()
@@ -94,7 +94,3 @@ async def process_city(message: Message, state: FSMContext):
     }
 
     await message.reply("Ваш профиль установлен.")
-
-
-
-
