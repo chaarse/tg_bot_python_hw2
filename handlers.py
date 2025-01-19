@@ -33,7 +33,8 @@ async def cmd_start(message: Message):
 # Команда /help
 @router.message(Command('help'))
 async def cmd_help(message: Message):
-    await message.reply("Команды:\n/set_profile - Настроить профиль\n"
+    await message.reply("Команды:\n"
+                        "/set_profile - Настроить профиль\n"
                         "/log_water <количество> - Логировать воду\n"
                         "/log_food <название продукта> - Логировать еду\n"
                         "/check_progress - Проверить прогресс")
