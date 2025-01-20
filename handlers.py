@@ -226,14 +226,14 @@ async def process_food_amount(message: Message, state: FSMContext):
 @router.message(Command('log_workout'))
 async def log_workout(message: Message):
     try:
-        # Разделяем введенную строку на части
-        args = message.text.split()
+        # Разделяем введенную строку на части, убираем команду
+        args = message.text.split()[1:]  # Отрезаем команду и оставляем только аргументы
 
         # Проверяем, что есть хотя бы два аргумента (тип тренировки и время)
-        if len(args) < 3:
+        if len(args) < 2:
             raise ValueError("Укажите тип тренировки и время в минутах.")
 
-        workout_type = " ".join(args[1:-1])  # Тип тренировки (все слова между первым и последним элементом)
+        workout_type = " ".join(args[:-1])  # Тип тренировки (все слова между первым и последним элементом)
         time_spent = int(args[-1])  # Время тренировки — последний элемент строки, преобразуем в целое число
 
         # Проверка на положительность времени тренировки
