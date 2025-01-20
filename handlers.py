@@ -218,7 +218,7 @@ async def process_food_amount(message: Message, state: FSMContext):
     except ValueError as e:
         await message.answer(f"Ошибка: {e}")
 
-
+# Лог тренировки
 @router.message(Command('log_workout'))
 async def log_workout(message: Message):
     try:
