@@ -222,24 +222,19 @@ async def process_food_amount(message: Message, state: FSMContext):
 @router.message(Command('log_workout'))
 async def log_workout(message: Message):
     try:
-        # Извлекаем текст команды без учёта самого "/log_workout"
-        args = message.text.split(maxsplit=1)[1].split()
-
-        # Проверяем, что переданы как минимум 2 аргумента
-        if len(args) < 2:
+        args = message.text.split()
+        if len(args) < 3:
             raise ValueError("Укажите тип тренировки и время в минутах.")
 
-        # Первый аргумент — это тип тренировки, остальные — время
-        workout_type = " ".join(args[:-1])
-        try:
-            time_spent = int(args[-1])  # Последний аргумент — время
-        except ValueError:
-            raise ValueError("Время тренировки должно быть числом.")
-
+        # Получение времени (последний аргумент)
+        time_spent = int(args[-1])  # Попытка преобразовать время
         if time_spent <= 0:
             raise ValueError("Время тренировки должно быть положительным числом.")
 
-        # Запрос калорий, сожжённых на тренировке
+        # Получение типа тренировки (все, кроме последнего аргумента)
+        workout_type = " ".join(args[1:-1])  # Тип тренировки
+
+        # Запрос калорий
         async with aiohttp.ClientSession() as session:
             url = f"https://api.api-ninjas.com/v1/caloriesburned?activity={workout_type}&duration={time_spent}"
             headers = {"X-Api-Key": CALORIES_API}
@@ -250,16 +245,17 @@ async def log_workout(message: Message):
                 else:
                     raise ValueError("Ошибка при получении данных о тренировке.")
 
-        # Расчет воды на тренировке
+        # Расчет воды
         water_needed = (time_spent // 30) * 200
+
         await message.answer(
             f"🏋️‍♂️ {workout_type.capitalize()} {time_spent} минут — {calories_burned} ккал.\n"
             f"Дополнительно: выпейте {water_needed} мл воды."
         )
     except ValueError as e:
         await message.answer(f"Ошибка: {e}")
-    except IndexError:
-        await message.answer("Ошибка: Укажите корректные параметры после команды.")
+    except Exception as e:
+        await message.answer(f"Непредвиденная ошибка: {e}")
 
 # Команда /check_progress
 @router.message(Command('check_progress'))
