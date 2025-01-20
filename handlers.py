@@ -6,10 +6,14 @@ from aiogram.types import Message
 import aiohttp
 from datetime import datetime
 from config import WEATHER_API_KEY, CALORIES_API_KEY
+import logging
 
 API_KEY = WEATHER_API_KEY
 CALORIES_API = CALORIES_API_KEY
 router = Router()
+
+# Логирование
+logging.basicConfig(level=logging.INFO)
 
 # Состояния пользователя
 class ProfileStates(StatesGroup):
@@ -20,17 +24,22 @@ class ProfileStates(StatesGroup):
     waiting_for_city = State()
     waiting_for_food_amount = State()
 
+# Хранилище для логов воды
+user_water_logs = {}
+
 # Хранилище для профилей пользователей
-user_profiles = {}
+users = {}
 
 # Команда /start
 @router.message(Command('start'))
 async def cmd_start(message: Message):
+    logging.info(f"Бот запущен! Получено сообщение /start от {message.from_user.id}")
     await message.reply("Привет! Я бот для расчёта нормы воды, калорий и трекинга активности.\nВведите /help для получения списка команд.")
 
 # Команда /help
 @router.message(Command('help'))
 async def cmd_help(message: Message):
+    logging.info(f"Получено сообщение /help от {message.from_user.id}")
     await message.reply("Команды:\n"
                         "/set_profile - Настроить профиль\n"
                         "/log_water <количество> - Логировать воду\n"
@@ -121,15 +130,29 @@ async def process_city(message: Message, state: FSMContext):
         'last_update': datetime.now(),
         'calories_consumed': 0,  # Инициализация счетчика калорий
         'water_drunk': 0,  # Инициализация счетчика воды
-        'burned_calories': 0  # Инициализация счетчика сожженных калорий
+        'burned_calories': 0  # Инициализация сожженных калорий
     })
-    user_profiles[message.from_user.id] = user_data
+    users[message.from_user.id] = user_data
     await state.clear()
     await message.answer(
         f"Ваш профиль успешно сохранен!\n"
         f"Суточная норма воды: {total_water_norm} мл.\n"
         f"Базовая норма калорий: {calories} ккал."
     )
+
+# Команда /check_progress
+@router.message(Command('check_progress'))
+async def check_progress(message: Message):
+    user_id = message.from_user.id
+    if user_id not in users:
+        await message.answer("Ваш профиль не настроен. Введите /set_profile для настройки.")
+        return
+
+    user_data = users[user_id]
+    water_progress = f"Вода:\n- Выпито: {user_data['water_drunk']} мл из {user_data['total_water_norm']} мл.\n- Осталось: {max(0, user_data['total_water_norm'] - user_data['water_drunk'])} мл."
+    calorie_progress = f"Калории:\n- Потреблено: {user_data['calories_consumed']} ккал из {user_data['calories']} ккал.\n- Сожжено: {user_data['burned_calories']} ккал.\n- Баланс: {max(0, user_data['calories'] - user_data['calories_consumed'] - user_data['burned_calories'])} ккал."
+
+    await message.answer(f"📊 Прогресс:\n{water_progress}\n{calorie_progress}")
 
 # Лог воды
 @router.message(Command('log_water'))
@@ -142,15 +165,73 @@ async def log_water(message: Message):
         if water <= 0:
             raise ValueError("Количество воды должно быть положительным числом.")
         user_id = message.from_user.id
-        if user_id not in user_profiles:
+        if user_id not in users:
             await message.answer("Ваш профиль не настроен. Введите /set_profile для настройки.")
             return
-        user_data = user_profiles.get(user_id, {})
+        user_data = users.get(user_id, {})
         user_data['water_drunk'] = user_data.get('water_drunk', 0) + water
         remaining_water = max(0, user_data['total_water_norm'] - user_data['water_drunk'])
+        users[user_id] = user_data
         await message.answer(
             f"Вы выпили {user_data['water_drunk']} мл воды.\n"
             f"Осталось выпить: {remaining_water} мл до выполнения нормы."
+        )
+        logging.info(f"Получено сообщение /log_water от {message.from_user.id}, добавлено {water} мл воды.")
+    except ValueError as e:
+        await message.answer(f"Ошибка: {e}")
+
+# Логирование еды
+@router.message(Command('log_food'))
+async def log_food(message: Message, state: FSMContext):
+    try:
+        args = message.text.split()
+        if len(args) < 2:
+            raise ValueError("Укажите название продукта.")
+        product_name = " ".join(args[1:])
+        async with aiohttp.ClientSession() as session:
+            url = f"https://world.openfoodfacts.org/cgi/search.pl?action=process&search_terms={product_name}&json=true"
+            async with session.get(url) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    products = data.get('products', [])
+                    if products:
+                        first_product = products[0]
+                        food_name = first_product.get('product_name', 'Неизвестно')
+                        calories = first_product.get('nutriments', {}).get('energy-kcal_100g', 0)
+                        if calories == 0:
+                            await message.answer(f"Не удалось найти калорийность для продукта '{food_name}'.")
+                            return
+                        await message.answer(f"🍌 {food_name} — {calories} ккал на 100 г. Сколько грамм вы съели?")
+                        await state.set_state(ProfileStates.waiting_for_food_amount)
+                        await state.update_data(calories=calories)
+                    else:
+                        await message.answer(f"Продукт '{product_name}' не найден.")
+                else:
+                    raise ValueError("Ошибка при запросе данных о продукте.")
+    except ValueError as e:
+        await message.answer(f"Ошибка: {e}")
+
+# Обработка количества съеденного продукта
+@router.message(ProfileStates.waiting_for_food_amount)
+async def process_food_amount(message: Message, state: FSMContext):
+    try:
+        amount = int(message.text)
+        if amount <= 0:
+            raise ValueError("Количество продукта должно быть положительным числом.")
+        user_data = await state.get_data()
+        calories_per_100g = user_data['calories']
+        total_calories = (calories_per_100g * amount) / 100
+        user_id = message.from_user.id
+        if user_id not in users:
+            await message.answer("Ваш профиль не настроен. Введите /set_profile для настройки.")
+            return
+        user_data = users[user_id]
+        user_data['calories_consumed'] += total_calories
+        remaining_calories = max(0, user_data['calories'] - user_data['calories_consumed'])
+        users[user_id] = user_data
+        await message.answer(
+            f"Вы съели {total_calories} ккал.\n"
+            f"Осталось до нормы: {remaining_calories} ккал."
         )
     except ValueError as e:
         await message.answer(f"Ошибка: {e}")
@@ -169,8 +250,6 @@ async def log_workout(message: Message):
             raise ValueError("Время тренировки должно быть числом.")
         if time_spent <= 0:
             raise ValueError("Время тренировки должно быть положительным числом.")
-
-        # Запрос калорий, сожжённых на тренировке
         async with aiohttp.ClientSession() as session:
             url = f"https://api.api-ninjas.com/v1/caloriesburned?activity={workout_type}&duration={time_spent}"
             headers = {"X-Api-Key": CALORIES_API}
@@ -183,41 +262,9 @@ async def log_workout(message: Message):
                         calories_burned = 0
                 else:
                     raise ValueError("Ошибка при получении данных о тренировке.")
-
-        # Расчет воды на тренировке
         water_needed = (time_spent // 30) * 200
-        user_id = message.from_user.id
-        if user_id in user_profiles:
-            user_data = user_profiles[user_id]
-            user_data['burned_calories'] += calories_burned
-            await message.answer(
-                f"🏋️‍♂️ {workout_type.capitalize()} {time_spent} минут — {calories_burned} ккал.\n"
-                f"Дополнительно: выпейте {water_needed} мл воды."
-            )
-        else:
-            await message.answer("Ваш профиль не настроен. Введите /set_profile для настройки.")
+        await message.answer(
+            f"🏋️‍♂️ {workout_type.capitalize()} {time_spent} минут — {calories_burned} ккал.\n"f"Дополнительно: выпейте {water_needed} мл воды."
+        )
     except ValueError as e:
         await message.answer(f"Ошибка: {e}")
-
-# Команда /check_progress
-@router.message(Command('check_progress'))
-async def check_progress(message: Message):
-    user_id = message.from_user.id
-    if user_id in user_profiles:
-        user_data = user_profiles[user_id]
-        remaining_water = max(0, user_data['total_water_norm'] - user_data['water_drunk'])
-        remaining_calories = max(0, user_data['calories'] - user_data['calories_consumed'])
-        balance_calories = user_data['calories_consumed'] - user_data['burned_calories']
-
-        await message.answer(
-            f"📊 Прогресс:\n"
-            f"Вода:\n"
-            f"- Выпито: {user_data['water_drunk']} мл из {user_data['total_water_norm']} мл.\n"
-            f"- Осталось: {remaining_water} мл.\n\n"
-            f"Калории:\n"
-            f"- Израсходовано: {user_data['calories_consumed']} ккал.\n"
-            f"- Сожжено: {user_data['burned_calories']} ккал.\n"
-            f"- Баланс: {balance_calories} ккал."
-        )
-    else:
-        await message.answer("Ваш профиль не настроен. Введите /set_profile для настройки.")
