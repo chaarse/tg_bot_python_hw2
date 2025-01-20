@@ -218,20 +218,27 @@ async def process_food_amount(message: Message, state: FSMContext):
     except ValueError as e:
         await message.answer(f"Ошибка: {e}")
 
-# Логирование тренировки
+
 @router.message(Command('log_workout'))
 async def log_workout(message: Message):
     try:
-        args = message.text.split()
-        if len(args) < 3:
+        # Извлекаем текст команды без учёта самого "/log_workout"
+        args = message.text.split(maxsplit=1)[1].split()
+
+        # Проверяем, что переданы как минимум 2 аргумента
+        if len(args) < 2:
             raise ValueError("Укажите тип тренировки и время в минутах.")
-        workout_type = " ".join(args[1:-1])  # Тип тренировки
+
+        # Первый аргумент — это тип тренировки, остальные — время
+        workout_type = " ".join(args[:-1])
         try:
-            time_spent = int(args[-1])  # Время тренировки
+            time_spent = int(args[-1])  # Последний аргумент — время
         except ValueError:
             raise ValueError("Время тренировки должно быть числом.")
+
         if time_spent <= 0:
             raise ValueError("Время тренировки должно быть положительным числом.")
+
         # Запрос калорий, сожжённых на тренировке
         async with aiohttp.ClientSession() as session:
             url = f"https://api.api-ninjas.com/v1/caloriesburned?activity={workout_type}&duration={time_spent}"
@@ -239,12 +246,10 @@ async def log_workout(message: Message):
             async with session.get(url, headers=headers) as response:
                 if response.status == 200:
                     data = await response.json()
-                    if data:
-                        calories_burned = data[0].get('total_calories', 0)
-                    else:
-                        calories_burned = 0
+                    calories_burned = data[0].get('total_calories', 0) if data else 0
                 else:
                     raise ValueError("Ошибка при получении данных о тренировке.")
+
         # Расчет воды на тренировке
         water_needed = (time_spent // 30) * 200
         await message.answer(
@@ -253,6 +258,8 @@ async def log_workout(message: Message):
         )
     except ValueError as e:
         await message.answer(f"Ошибка: {e}")
+    except IndexError:
+        await message.answer("Ошибка: Укажите корректные параметры после команды.")
 
 # Команда /check_progress
 @router.message(Command('check_progress'))
