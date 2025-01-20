@@ -197,12 +197,13 @@ async def process_food_amount(message: Message, state: FSMContext):
         amount = int(message.text)
         if amount <= 0:
             raise ValueError("Количество продукта должно быть положительным числом.")
-        # Получаем данные из состояния
+
         user_data = await state.get_data()
         calories_per_100g = user_data['calories']
-        # Считаем общее количество калорий
+
         total_calories = (calories_per_100g * amount) / 100
         user_id = message.from_user.id
+
         # Получаем профиль пользователя
         if user_id not in user_profiles:
             await message.answer("Ваш профиль не настроен. Введите /set_profile для настройки.")
