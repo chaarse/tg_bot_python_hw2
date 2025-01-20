@@ -221,15 +221,22 @@ async def process_food_amount(message: Message, state: FSMContext):
     except ValueError as e:
         await message.answer(f"Ошибка: {e}")
 
+
 # Логирование тренировки
 @router.message(Command('log_workout'))
 async def log_workout(message: Message):
     try:
+        # Разделяем введенную строку на части
         args = message.text.split()
+
+        # Проверяем, что есть хотя бы два аргумента (тип тренировки и время)
         if len(args) < 3:
             raise ValueError("Укажите тип тренировки и время в минутах.")
-        workout_type = " ".join(args[1:-1])
-        time_spent = int(args[-1])
+
+        workout_type = " ".join(args[1:-1])  # Тип тренировки (все слова между первым и последним элементом)
+        time_spent = int(args[-1])  # Время тренировки — последний элемент строки, преобразуем в целое число
+
+        # Проверка на положительность времени тренировки
         if time_spent <= 0:
             raise ValueError("Время тренировки должно быть положительным числом.")
 
