@@ -224,13 +224,15 @@ async def process_food_amount(message: Message, state: FSMContext):
 
 # Логирование тренировки
 @router.message(Command("log_workout"))
-async def log_workout(message: Message):
-    args = message.text.split()
-    if len(args) < 3:
+async def log_workout(message: Message, command: Command):
+    # Получаем аргументы из команды
+    args = command.args
+
+    if len(args) < 2:
         raise ValueError("Неверный формат команды. Используйте: /log_workout <тип тренировки> <время в минутах>")
 
-    workout_type = ' '.join(args[1:-1]).strip()
-    time_spent_str = args[-1].strip()
+    workout_type = ' '.join(args[:-1]).strip()  # Все части до последнего аргумента — это тип тренировки
+    time_spent_str = args[-1].strip()  # Последний аргумент — это время тренировки
 
     if not time_spent_str.isdigit():
         raise ValueError("Время тренировки должно быть целым положительным числом.")
@@ -252,14 +254,18 @@ async def log_workout(message: Message):
     # Расчет дополнительной нормы воды
     water_needed = (time_spent // 30) * 200
     user_id = message.from_user.id
+
+    # Проверка, есть ли профиль пользователя
     if user_id not in users:
         await message.answer("Ваш профиль не настроен. Введите /set_profile для настройки.")
         return
 
+    # Обновляем данные пользователя
     user_data = users[user_id]
     user_data['burned_calories'] += calories_burned
     users[user_id] = user_data
 
+    # Ответ пользователю
     await message.answer(
         f"🏋️‍♂️ {workout_type.capitalize()} ({time_spent} минут) — {calories_burned:.1f} ккал.\n"
         f"Дополнительно: выпейте {water_needed} мл воды."
