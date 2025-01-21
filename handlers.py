@@ -226,8 +226,9 @@ async def process_food_amount(message: Message, state: FSMContext):
 # Логирование тренировки
 @router.message(Command("log_workout"))
 async def log_workout(message: Message):
+    _, _, command_args = message.text.partition('/log_workout ')
+    args = command_args.split()  # Получаем список аргументов
 
-    args = message.text.split()[1:]  # оставляем только аргументы
     if len(args) < 2:
         raise ValueError("Неверный формат команды. Используйте: /log_workout <тип тренировки> <время в минутах>")
 
