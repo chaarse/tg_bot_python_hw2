@@ -226,43 +226,39 @@ async def process_food_amount(message: Message, state: FSMContext):
 # Логирование тренировки
 @router.message(Command("log_workout"))
 async def log_workout(message: Message):
-    try:
-        args = message.text.split()
 
-        if len(args) < 3:
-            raise ValueError("Неверный формат команды. Используйте: /log_workout <тип тренировки> <время в минутах>")
+    args = message.text.split()
 
-        workout_type = ' '.join(args[1:-1]).strip()
-        time_spent_str = args[-1].strip()
+    if len(args) < 3:
+        raise ValueError("Неверный формат команды. Используйте: /log_workout <тип тренировки> <время в минутах>")
 
-        if not time_spent_str.isdigit():
-            raise ValueError("Время тренировки должно быть целым положительным числом.")
+    workout_type = ' '.join(args[1:-1]).strip()
+    time_spent_str = args[-1].strip()
 
-        time_spent = int(time_spent_str)
+    if not time_spent_str.isdigit():
+        raise ValueError("Время тренировки должно быть целым положительным числом.")
 
-        if time_spent <= 0:
-            raise ValueError("Время тренировки должно быть больше нуля.")
+    time_spent = int(time_spent_str)
 
-        # Запрос к API для расчета калорий
-        async with aiohttp.ClientSession() as session:
-            url = f"https://api.api-ninjas.com/v1/caloriesburned?activity={workout_type}&duration={time_spent}"
-            headers = {"X-Api-Key": CALORIES_API}
+    if time_spent <= 0:
+        raise ValueError("Время тренировки должно быть больше нуля.")
 
-            async with session.get(url, headers=headers) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    calories_burned = data[0].get('total_calories', 0) if data else 0
-                else:
-                    raise ValueError("Ошибка при запросе данных о тренировке.")
+    # Запрос к API для расчета калорий
+    async with aiohttp.ClientSession() as session:
+        url = f"https://api.api-ninjas.com/v1/caloriesburned?activity={workout_type}&duration={time_spent}"
+        headers = {"X-Api-Key": CALORIES_API}
 
-        # Расчет дополнительной нормы воды
-        water_needed = (time_spent // 30) * 200
+        async with session.get(url, headers=headers) as response:
+            if response.status == 200:
+                data = await response.json()
+                calories_burned = data[0].get('total_calories', 0) if data else 0
+            else:
+                raise ValueError("Ошибка при запросе данных о тренировке.")
 
-        await message.answer(
-            f"🏋️‍♂️ {workout_type.capitalize()} ({time_spent} минут) — {calories_burned:.1f} ккал.\n"
-            f"Дополнительно: выпейте {water_needed} мл воды."
-        )
-    except ValueError as e:
-        await message.answer(f"Ошибка: {e}")
-    except Exception as e:
-        await message.answer(f"Произошла непредвиденная ошибка: {e}")
+    # Расчет дополнительной нормы воды
+    water_needed = (time_spent // 30) * 200
+
+    await message.answer(
+        f"🏋️‍♂️ {workout_type.capitalize()} ({time_spent} минут) — {calories_burned:.1f} ккал.\n"
+        f"Дополнительно: выпейте {water_needed} мл воды."
+    )
