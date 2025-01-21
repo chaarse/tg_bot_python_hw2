@@ -232,8 +232,8 @@ async def log_workout(message: Message):
     if len(args) < 2:
         raise ValueError("Неверный формат команды. Используйте: /log_workout <тип тренировки> <время в минутах>")
 
-    workout_type = ' '.join(args[:-1]).strip()  # Все части до последнего аргумента — это тип тренировки
-    time_spent_str = args[-1].strip()  # Последний аргумент — это время тренировки
+    workout_type = ' '.join(args[:-1]).strip()  # тип тренировки
+    time_spent_str = args[-1].strip()  # время тренировки
 
     if not time_spent_str.isdigit():
         raise ValueError("Время тренировки должно быть целым положительным числом.")
