@@ -222,12 +222,12 @@ async def process_food_amount(message: Message, state: FSMContext):
     except ValueError as e:
         await message.answer(f"Ошибка: {e}")
 
+
 # Логирование тренировки
 @router.message(Command("log_workout"))
-async def log_workout(message: Message, command: Command):
-    # Получаем аргументы из команды
-    args = command.args
+async def log_workout(message: Message):
 
+    args = message.text.split()[1:]  # оставляем только аргументы
     if len(args) < 2:
         raise ValueError("Неверный формат команды. Используйте: /log_workout <тип тренировки> <время в минутах>")
 
@@ -255,7 +255,6 @@ async def log_workout(message: Message, command: Command):
     water_needed = (time_spent // 30) * 200
     user_id = message.from_user.id
 
-    # Проверка, есть ли профиль пользователя
     if user_id not in users:
         await message.answer("Ваш профиль не настроен. Введите /set_profile для настройки.")
         return
