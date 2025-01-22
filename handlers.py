@@ -229,17 +229,20 @@ async def log_workout(message: Message):
     args = command_args.split()  # список аргументов
 
     if len(args) < 2:
-        raise ValueError("Неверный формат команды. Используйте: /log_workout <тип тренировки> <время в минутах>")
+        await message.answer("Неверный формат команды. Используйте: /log_workout <тип тренировки> <время в минутах>")
+        return
 
     workout_type = ' '.join(args[:-1]).strip()  # тип тренировки
     time_spent_str = args[-1].strip()  # время тренировки
 
     if not time_spent_str.isdigit():
-        raise ValueError("Время тренировки должно быть целым положительным числом.")
+        await message.answer("Время тренировки должно быть целым положительным числом.")
+        return
 
     time_spent = int(time_spent_str)
     if time_spent <= 0:
-        raise ValueError("Время тренировки должно быть больше нуля.")
+        await message.answer("Время тренировки должно быть больше нуля.")
+        return
 
     async with aiohttp.ClientSession() as session:
         url = f"https://api.api-ninjas.com/v1/caloriesburned?activity={workout_type}&duration={time_spent}"
@@ -249,12 +252,13 @@ async def log_workout(message: Message):
                 data = await response.json()
                 calories_burned = data[0].get('total_calories', 0) if data else 0
             else:
-                raise ValueError("Ошибка при запросе данных о тренировке.")
+                await message.answer("Ошибка при запросе данных о тренировке.")
+                return
 
     # Расчет дополнительной нормы воды
     water_needed = (time_spent // 30) * 200
-    user_id = message.from_user.id
 
+    user_id = message.from_user.id
     if user_id not in users:
         await message.answer("Ваш профиль не настроен. Введите /set_profile для настройки.")
         return
@@ -262,6 +266,7 @@ async def log_workout(message: Message):
     # Обновляем данные пользователя
     user_data = users[user_id]
     user_data['burned_calories'] += calories_burned
+    user_data['water_goal'] += water_needed  # Увеличиваем норму воды
     users[user_id] = user_data
 
     await message.answer(
