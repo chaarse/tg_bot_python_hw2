@@ -1,10 +1,14 @@
-from aiogram import Router, types
+from aiogram import Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import Message
 import aiohttp
+import logging
+
 from config import WEATHER_API_KEY, CALORIES_API_KEY
+
+logger = logging.getLogger(__name__)
 
 API_KEY = WEATHER_API_KEY
 CALORIES_API = CALORIES_API_KEY
@@ -25,11 +29,13 @@ users = {}
 # Команда /start
 @router.message(Command('start'))
 async def cmd_start(message: Message):
+    logger.info(f"Получено сообщение: {message.text}")
     await message.reply("Привет! Я бот для расчёта нормы воды, калорий и трекинга активности.\nВведите /help для получения списка команд.")
 
 # Команда /help
 @router.message(Command('help'))
 async def cmd_help(message: Message):
+    logger.info(f"Получено сообщение: {message.text}")
     await message.reply("Команды:\n"
                         "/set_profile - Настроить профиль\n"
                         "/log_water <количество> - Логировать воду\n"
@@ -40,6 +46,7 @@ async def cmd_help(message: Message):
 # Настройка профиля
 @router.message(Command('set_profile'))
 async def set_profile(message: Message, state: FSMContext):
+    logger.info(f"Получено сообщение: {message.text}")
     await state.set_state(ProfileStates.waiting_for_weight)
     await message.answer("Введите свой вес в килограммах:")
 
@@ -138,6 +145,7 @@ async def process_city(message: Message, state: FSMContext):
 # Лог воды
 @router.message(Command('log_water'))
 async def log_water(message: Message):
+    logger.info(f"Получено сообщение: {message.text}")
     try:
         args = message.text.split()
         if len(args) < 2:
@@ -165,6 +173,7 @@ async def log_water(message: Message):
 # Лог еды
 @router.message(Command('log_food'))
 async def log_food(message: Message, state: FSMContext):
+    logger.info(f"Получено сообщение: {message.text}")
     try:
         args = message.text.split()
         if len(args) < 2:
@@ -225,6 +234,7 @@ async def process_food_amount(message: Message, state: FSMContext):
 # Лог тренировки
 @router.message(Command("log_workout"))
 async def log_workout(message: Message):
+    logger.info(f"Получено сообщение: {message.text}")
     _, _, command_args = message.text.partition('/log_workout ')
     args = command_args.split()  # список аргументов
 
@@ -278,6 +288,7 @@ async def log_workout(message: Message):
 # Прогресс пользователя
 @router.message(Command('check_progress'))
 async def check_progress(message: Message):
+    logger.info(f"Получено сообщение: {message.text}")
     user_id = message.from_user.id
     if user_id not in users:
         await message.answer("Ваш профиль не настроен. Введите /set_profile для настройки.")
