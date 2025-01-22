@@ -9,7 +9,6 @@ from config import WEATHER_API_KEY, CALORIES_API_KEY
 
 API_KEY = WEATHER_API_KEY
 CALORIES_API = CALORIES_API_KEY
-
 router = Router()
 
 # Состояния пользователя
@@ -21,11 +20,8 @@ class ProfileStates(StatesGroup):
     waiting_for_city = State()
     waiting_for_food_amount = State()
 
-# Хранилище для логов воды
-user_water_logs = {}
-
-# Хранилище для профилей пользователей
-user_profiles = {}
+# Хранилище для пользователей
+users = {}
 
 # Команда /start
 @router.message(Command('start'))
@@ -39,8 +35,8 @@ async def cmd_help(message: Message):
                         "/set_profile - Настроить профиль\n"
                         "/log_water <количество> - Логировать воду\n"
                         "/log_food <название продукта> - Логировать еду\n"
-                        "/check_progress - Проверить прогресс\n"
-                        "/log_workout <тип тренировки> <время (мин)> - Логировать тренировку")
+                        "/log_workout <тип тренировки> <время (мин)> - Логировать тренировку\n"
+                        "/check_progress - Проверить прогресс")
 
 # Настройка профиля
 @router.message(Command('set_profile'))
@@ -117,17 +113,22 @@ async def process_city(message: Message, state: FSMContext):
     activity_bonus = user_data['activity_level'] // 30 * 500
     hot_weather_bonus = 500 if temperature > 25 else 0
     total_water_norm = base_water_norm + activity_bonus + hot_weather_bonus
-
     calories = 10 * user_data['weight'] + 6.25 * user_data['height'] - 5 * user_data['age']
 
-    user_data.update({
+    # Обновляем или создаём профиль пользователя
+    users[message.from_user.id] = {
+        'weight': user_data['weight'],
+        'height': user_data['height'],
+        'age': user_data['age'],
+        'activity': user_data['activity_level'],
         'city': city,
-        'total_water_norm': total_water_norm,
-        'calories': calories,
-        'last_update': datetime.now(),
-        'calories_consumed': 0  # Инициализация счетчика калорий
-    })
-    user_profiles[message.from_user.id] = user_data
+        'water_goal': total_water_norm,
+        'calorie_goal': calories,
+        'logged_water': 0,
+        'logged_calories': 0,
+        'burned_calories': 0
+    }
+
     await state.clear()
     await message.answer(
         f"Ваш профиль успешно сохранен!\n"
@@ -145,15 +146,18 @@ async def log_water(message: Message):
         water = int(args[1])
         if water <= 0:
             raise ValueError("Количество воды должно быть положительным числом.")
+
         user_id = message.from_user.id
-        if user_id not in user_profiles:
+        if user_id not in users:
             await message.answer("Ваш профиль не настроен. Введите /set_profile для настройки.")
             return
-        user_data = user_profiles.get(user_id, {})
-        user_data['water_drunk'] = user_data.get('water_drunk', 0) + water
-        remaining_water = max(0, user_data['total_water_norm'] - user_data['water_drunk'])
+
+        user_data = users[user_id]
+        user_data['logged_water'] += water
+        remaining_water = max(0, user_data['water_goal'] - user_data['logged_water'])
+
         await message.answer(
-            f"Вы выпили {user_data['water_drunk']} мл воды.\n"
+            f"Вы выпили {user_data['logged_water']} мл воды.\n"
             f"Осталось выпить: {remaining_water} мл до выполнения нормы."
         )
     except ValueError as e:
@@ -167,7 +171,7 @@ async def log_food(message: Message, state: FSMContext):
         if len(args) < 2:
             raise ValueError("Укажите название продукта.")
         product_name = " ".join(args[1:])
-        # Запрос информации о продукте
+
         async with aiohttp.ClientSession() as session:
             url = f"https://world.openfoodfacts.org/cgi/search.pl?action=process&search_terms={product_name}&json=true"
             async with session.get(url) as response:
@@ -200,21 +204,18 @@ async def process_food_amount(message: Message, state: FSMContext):
 
         user_data = await state.get_data()
         calories_per_100g = user_data['calories']
-
         total_calories = (calories_per_100g * amount) / 100
         user_id = message.from_user.id
-
-        # Получаем профиль пользователя
-        if user_id not in user_profiles:
+        if user_id not in users:
             await message.answer("Ваш профиль не настроен. Введите /set_profile для настройки.")
             return
-        user_data = user_profiles[user_id]
-        # Добавляем калории к общей сумме
-        user_data['calories_consumed'] += total_calories
-        # Считаем, сколько осталось до нормы
-        remaining_calories = max(0, user_data['calories'] - user_data['calories_consumed'])
-        # Обновляем профиль пользователя
-        user_profiles[user_id] = user_data
+
+        user_data = users[user_id]
+        user_data['logged_calories'] += total_calories
+        remaining_calories = max(0, user_data['calorie_goal'] - user_data['logged_calories'])
+        users[user_id] = user_data
+
+        await state.clear()
         await message.answer(
             f"Вы съели {total_calories} ккал.\n"
             f"Осталось до нормы: {remaining_calories} ккал."
@@ -222,45 +223,50 @@ async def process_food_amount(message: Message, state: FSMContext):
     except ValueError as e:
         await message.answer(f"Ошибка: {e}")
 
-
 # Логирование тренировки
-@router.message(Command('log_workout'))
+@router.message(Command("log_workout"))
 async def log_workout(message: Message):
-    try:
-        args = message.text.split()
+    _, _, command_args = message.text.partition('/log_workout ')
+    args = command_args.split()  # Получаем список аргументов
 
-        if len(args) < 3:
-            raise ValueError("Укажите тип тренировки и время в минутах.")
+    if len(args) < 2:
+        raise ValueError("Неверный формат команды. Используйте: /log_workout <тип тренировки> <время в минутах>")
 
-        workout_type = " ".join(args[1:-1])  # Тип тренировки
+    workout_type = ' '.join(args[:-1]).strip()  # тип тренировки
+    time_spent_str = args[-1].strip()  # время тренировки
 
-        try:
-            time_spent = int(args[-1])  # Время тренировки
-        except ValueError:
-            raise ValueError("Время тренировки должно быть числом.")
+    if not time_spent_str.isdigit():
+        raise ValueError("Время тренировки должно быть целым положительным числом.")
 
-        if time_spent <= 0:
-            raise ValueError("Время тренировки должно быть положительным числом.")
+    time_spent = int(time_spent_str)
+    if time_spent <= 0:
+        raise ValueError("Время тренировки должно быть больше нуля.")
 
-        # Запрос калорий, сожжённых на тренировке
-        async with aiohttp.ClientSession() as session:
-            url = f"https://api.api-ninjas.com/v1/caloriesburned?activity={workout_type}&duration={time_spent}"
-            headers = {"X-Api-Key": CALORIES_API}
-            async with session.get(url, headers=headers) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    if data:
-                        calories_burned = data[0].get('total_calories', 0)
-                    else:
-                        calories_burned = 0
-                else:
-                    raise ValueError("Ошибка при получении данных о тренировке.")
+    async with aiohttp.ClientSession() as session:
+        url = f"https://api.api-ninjas.com/v1/caloriesburned?activity={workout_type}&duration={time_spent}"
+        headers = {"X-Api-Key": CALORIES_API}
+        async with session.get(url, headers=headers) as response:
+            if response.status == 200:
+                data = await response.json()
+                calories_burned = data[0].get('total_calories', 0) if data else 0
+            else:
+                raise ValueError("Ошибка при запросе данных о тренировке.")
 
-        # Расчет воды на тренировке
-        water_needed = (time_spent // 30) * 200
-        await message.answer(
-            f"🏋️‍♂️ {workout_type.capitalize()} {time_spent} минут — {calories_burned} ккал.\n"
-            f"Дополнительно: выпейте {water_needed} мл воды."
-        )
-    except ValueError as e:
-        await message.answer(f"Ошибка: {e}")
+    # Расчет дополнительной нормы воды
+    water_needed = (time_spent // 30) * 200
+    user_id = message.from_user.id
+
+    if user_id not in users:
+        await message.answer("Ваш профиль не настроен. Введите /set_profile для настройки.")
+        return
+
+    # Обновляем данные пользователя
+    user_data = users[user_id]
+    user_data['burned_calories'] += calories_burned
+    users[user_id] = user_data
+
+    # Ответ пользователю
+    await message.answer(
+        f"🏋️‍♂️ {workout_type.capitalize()} ({time_spent} минут) — {calories_burned:.1f} ккал.\n"
+        f"Дополнительно: выпейте {water_needed} мл воды."
+    )
