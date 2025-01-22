@@ -268,3 +268,33 @@ async def log_workout(message: Message):
         f"🏋️‍♂️ {workout_type.capitalize()} ({time_spent} минут) — {calories_burned:.1f} ккал.\n"
         f"Дополнительно: выпейте {water_needed} мл воды."
     )
+
+# Прогресс пользователя
+@router.message(Command('check_progress'))
+async def check_progress(message: Message):
+    user_id = message.from_user.id
+    if user_id not in users:
+        await message.answer("Ваш профиль не настроен. Введите /set_profile для настройки.")
+        return
+
+    user_data = users[user_id]
+
+    water_logged = user_data['logged_water']
+    water_goal = user_data['water_goal']
+    water_remaining = max(0, water_goal - water_logged)
+
+    calories_logged = user_data['logged_calories']
+    calorie_goal = user_data['calorie_goal']
+    calories_burned = user_data['burned_calories']
+    calorie_balance = max(0, calorie_goal - calories_logged + calories_burned)
+
+    await message.answer(
+        f"📊 Прогресс:\n"
+        f"Вода:\n"
+        f"- Выпито: {water_logged} мл из {water_goal} мл.\n"
+        f"- Осталось: {water_remaining} мл.\n\n"
+        f"Калории:\n"
+        f"- Потреблено: {calories_logged} ккал из {calorie_goal} ккал.\n"
+        f"- Сожжено: {calories_burned} ккал.\n"
+        f"- Баланс: {calorie_balance} ккал."
+    )
