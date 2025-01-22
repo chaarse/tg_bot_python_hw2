@@ -4,7 +4,6 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import Message
 import aiohttp
-from datetime import datetime
 from config import WEATHER_API_KEY, CALORIES_API_KEY
 
 API_KEY = WEATHER_API_KEY
@@ -163,7 +162,7 @@ async def log_water(message: Message):
     except ValueError as e:
         await message.answer(f"Ошибка: {e}")
 
-# Логирование еды
+# Лог еды
 @router.message(Command('log_food'))
 async def log_food(message: Message, state: FSMContext):
     try:
@@ -223,11 +222,11 @@ async def process_food_amount(message: Message, state: FSMContext):
     except ValueError as e:
         await message.answer(f"Ошибка: {e}")
 
-# Логирование тренировки
+# Лог тренировки
 @router.message(Command("log_workout"))
 async def log_workout(message: Message):
     _, _, command_args = message.text.partition('/log_workout ')
-    args = command_args.split()  # Получаем список аргументов
+    args = command_args.split()  # список аргументов
 
     if len(args) < 2:
         raise ValueError("Неверный формат команды. Используйте: /log_workout <тип тренировки> <время в минутах>")
@@ -265,7 +264,6 @@ async def log_workout(message: Message):
     user_data['burned_calories'] += calories_burned
     users[user_id] = user_data
 
-    # Ответ пользователю
     await message.answer(
         f"🏋️‍♂️ {workout_type.capitalize()} ({time_spent} минут) — {calories_burned:.1f} ккал.\n"
         f"Дополнительно: выпейте {water_needed} мл воды."
