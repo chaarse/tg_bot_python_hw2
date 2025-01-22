@@ -215,13 +215,13 @@ async def process_food_amount(message: Message, state: FSMContext):
         remaining_calories = max(0, user_data['calorie_goal'] - user_data['logged_calories'])
         users[user_id] = user_data
 
+        await state.clear()
         await message.answer(
             f"Вы съели {total_calories} ккал.\n"
             f"Осталось до нормы: {remaining_calories} ккал."
         )
     except ValueError as e:
         await message.answer(f"Ошибка: {e}")
-
 
 # Логирование тренировки
 @router.message(Command("log_workout"))
